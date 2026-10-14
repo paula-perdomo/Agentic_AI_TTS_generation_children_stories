@@ -38,7 +38,7 @@ export const VALID_VOICES = [
 // 1. Text-to-Speech Endpoint
 app.post('/api/tts/generate', async (req, res) => {
   try {
-    const { text, voice = 'Kore', language = 'en', style } = req.body;
+    const { text, voice = 'Kore', language = 'en', style, mode = 'daylight' } = req.body;
 
     if (!text || typeof text !== 'string' || !text.trim()) {
       return res.status(400).json({ error: 'Text is required for speech generation.' });
@@ -46,11 +46,20 @@ app.post('/api/tts/generate', async (req, res) => {
 
     const selectedVoice = VALID_VOICES.includes(voice) ? voice : 'Kore';
 
-    // Tailor instruction for soft children's book narration with natural, higher pitch
+    // Tailor instruction depending on Sweet Daylight vs Bedtime reading mode
     const isSpanish = language === 'es';
-    const langStyle = isSpanish
-      ? 'Voz suave, dulce y expresiva de narradora de cuentos infantiles. Tono cálido, amigable, con cadencia rítmica y reconfortante para antes de dormir.'
-      : 'Soft, gentle, warm children’s book narrator with a naturally higher pitch, comforting bedtime cadence, and affectionate, clear articulation.';
+    const isDaylight = mode === 'daylight';
+
+    let langStyle: string;
+    if (isDaylight) {
+      langStyle = isSpanish
+        ? 'Voz dulce, alegre, luminosa y natural de cuentacuentos infantil. Tono amigable, vivaz y tierno, con ritmo fluido, entusiasta y dulce a la luz del día, articulación clara y alegre.'
+        : 'Sweet, cheerful, bright children’s storybook narrator with a sunny, friendly higher pitch, natural engaging curiosity, sweet flowing daylight pace, and joyful warmth.';
+    } else {
+      langStyle = isSpanish
+        ? 'Voz suave, dulce y reconfortante de narradora de cuentos infantiles. Tono cálido, amigable, con cadencia rítmica, relajante y pausada para antes de dormir.'
+        : 'Soft, gentle, warm children’s book narrator with a comforting bedtime cadence, peaceful measured pacing, and affectionate, quiet articulation.';
+    }
 
     const voiceDirective = style ? `${langStyle} ${style}` : langStyle;
 
@@ -99,8 +108,12 @@ app.post('/api/tts/generate', async (req, res) => {
     });
   } catch (err: any) {
     console.error('TTS Generation Error:', err);
-    res.status(500).json({
-      error: err.message || 'Failed to generate speech. Please try again.',
+    let errorText = err.message || 'Failed to generate speech. Please try again.';
+    if (errorText.includes('429') || errorText.includes('quota') || err?.status === 429) {
+      errorText = 'Speech model is cooling down. Please wait a few seconds and try again.';
+    }
+    res.status(err?.status === 429 ? 429 : 500).json({
+      error: errorText,
     });
   }
 });

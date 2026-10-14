@@ -20,12 +20,13 @@ import {
   audioBufferToMp3,
   downloadMp3,
 } from './utils/audioProcessor';
-import { Sparkles, Heart, AlertCircle } from 'lucide-react';
+import { Sparkles, Sun, Moon, AlertCircle } from 'lucide-react';
 
 export default function App() {
   // Navigation & Theme State
   const [activeTab, setActiveTab] = useState<'workshop' | 'collection' | 'audition'>('workshop');
   const [language, setLanguage] = useState<'en' | 'es'>('en');
+  const [readingAtmosphere, setReadingAtmosphere] = useState<'daylight' | 'bedtime'>('daylight');
   const [isBedtimeMode, setIsBedtimeMode] = useState<boolean>(false);
   const [isFocusMode, setIsFocusMode] = useState<boolean>(false);
   const [isBatchModalOpen, setIsBatchModalOpen] = useState<boolean>(false);
@@ -46,7 +47,10 @@ export default function App() {
     }))
   );
 
-  const [currentStoryId, setCurrentStoryId] = useState<string>(PRELOADED_STORIES[0].id);
+  const initialStory =
+    PRELOADED_STORIES.find((s) => s.language === 'en' && s.mode === 'daylight') ||
+    PRELOADED_STORIES[0];
+  const [currentStoryId, setCurrentStoryId] = useState<string>(initialStory.id);
 
   // Active Story Manuscript State
   const activeStory = stories.find((s) => s.id === currentStoryId) || stories[0];
@@ -98,6 +102,29 @@ export default function App() {
       document.documentElement.classList.remove('dark');
     }
   }, [isBedtimeMode]);
+
+  // When readingAtmosphere switches, adapt defaults for active voice and theme
+  const handleSwitchAtmosphere = (newMode: 'daylight' | 'bedtime') => {
+    setReadingAtmosphere(newMode);
+    const voice = VOICES.find((v) => v.id === selectedVoiceId) || VOICES[0];
+    if (newMode === 'daylight') {
+      setSpeed(voice.daylightSpeed);
+      setPitch(voice.daylightPitch);
+      setIsBedtimeMode(false);
+    } else {
+      setSpeed(voice.defaultSpeed);
+      setPitch(voice.defaultPitch);
+      setIsBedtimeMode(true);
+    }
+
+    // Switch to a matching sample story if the current story hasn't been heavily modified
+    const matchingSample = PRELOADED_STORIES.find(
+      (s) => s.language === language && s.mode === newMode
+    );
+    if (matchingSample) {
+      handleSelectStory(matchingSample.id);
+    }
+  };
 
   // Sync active story edits back into stories list
   useEffect(() => {
@@ -256,10 +283,14 @@ export default function App() {
     );
 
     try {
-      const stylePrompt =
-        target.language === 'es'
-          ? `Cuento infantil para niños. Tono dulce, voz suave con registro agudo natural. Pacing calmado y reconfortante.`
-          : `Children bedtime storybook narration. Soft, gentle voice with natural higher pitch warmth, measured calming cadence.`;
+      const isDay = readingAtmosphere === 'daylight';
+      const stylePrompt = isDay
+        ? target.language === 'es'
+          ? 'Cuento infantil para leer de día. Voz dulce, alegre y natural con ritmo fluido, entusiasta y cálido.'
+          : 'Sweet, cheerful daylight children storybook reading. Bright friendly higher pitch, engaging natural cadence.'
+        : target.language === 'es'
+        ? 'Cuento infantil para antes de dormir. Tono dulce, voz suave con registro relajante y pausado.'
+        : 'Children bedtime storybook narration. Soft, gentle voice with natural higher pitch warmth, measured calming cadence.';
 
       const response = await fetch('/api/tts/generate', {
         method: 'POST',
@@ -268,6 +299,7 @@ export default function App() {
           text: target.text,
           voice: target.voiceId,
           language: target.language,
+          mode: readingAtmosphere,
           style: stylePrompt,
         }),
       });
@@ -361,7 +393,7 @@ export default function App() {
         (story.title.trim() || 'story')
           .toLowerCase()
           .replace(/[^a-z0-9_\-\u00C0-\u017F]+/gi, '_')
-          .slice(0, 40) + `_${story.voiceId.toLowerCase()}.mp3`;
+          .slice(0, 40) + `_${story.voiceId.toLowerCase()}_${readingAtmosphere}.mp3`;
 
       downloadMp3(mp3Blob, safeFilename);
 
@@ -400,7 +432,7 @@ export default function App() {
       text: p.text,
       language: p.language,
       voiceId: p.recommendedVoice || 'Kore',
-      speed: 0.92,
+      speed: readingAtmosphere === 'daylight' ? 1.02 : 0.92,
       pitch: 2,
       audioBuffer: null,
       isGenerating: false,
@@ -421,11 +453,11 @@ export default function App() {
     const newId = `story-${Date.now()}`;
     const newStory: StoryItem = {
       id: newId,
-      title: language === 'es' ? 'Nuevo Cuento Infantil' : 'New Bedtime Story',
+      title: language === 'es' ? 'Nuevo Cuento Infantil' : 'New Story',
       text: '',
       language,
       voiceId: 'Kore',
-      speed: 0.92,
+      speed: readingAtmosphere === 'daylight' ? 1.02 : 0.92,
       pitch: 2,
       audioBuffer: null,
       isGenerating: false,
@@ -499,15 +531,33 @@ export default function App() {
     }
   };
 
-  // Quick voice preview audition
-  const handlePreviewVoice = async (voice: VoiceProfile) => {
+  // Quick voice preview audition with DAYLIGHT vs BEDTIME phrase & pace
+  const handlePreviewVoice = async (voice: VoiceProfile, previewMode?: 'daylight' | 'bedtime') => {
+    const effectiveMode = previewMode || readingAtmosphere;
+    const isDay = effectiveMode === 'daylight';
+
     setIsPreviewing(true);
     setPreviewVoiceId(voice.id);
     stopCurrentSource();
     setIsPlaying(false);
 
     try {
-      const sampleText = language === 'es' ? voice.samplePhraseEs : voice.samplePhraseEn;
+      const sampleText = isDay
+        ? language === 'es'
+          ? voice.samplePhraseDaylightEs
+          : voice.samplePhraseDaylightEn
+        : language === 'es'
+        ? voice.samplePhraseEs
+        : voice.samplePhraseEn;
+
+      const styleDirective = isDay
+        ? language === 'es'
+          ? 'Voz dulce, alegre, luminosa y natural de cuentacuentos infantil. Tono amigable, vivaz y tierno a la luz del día.'
+          : 'Sweet, cheerful, bright children’s storybook narrator with a sunny, friendly higher pitch, engaging natural curiosity, sweet flowing daylight pace, and joyful warmth.'
+        : language === 'es'
+        ? 'Voz suave, dulce y reconfortante de narradora de cuentos infantiles. Tono cálido, amigable, con cadencia rítmica para antes de dormir.'
+        : 'Soft, gentle, warm children’s book narrator with a comforting bedtime cadence, peaceful measured pacing, and quiet articulation.';
+
       const res = await fetch('/api/tts/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -515,7 +565,8 @@ export default function App() {
           text: sampleText,
           voice: voice.id,
           language,
-          style: 'Gentle, soft, clear articulation for children voice audition.',
+          mode: effectiveMode,
+          style: styleDirective,
         }),
       });
 
@@ -525,7 +576,9 @@ export default function App() {
       const ctx = getAudioContext();
       const decodedBuffer = await ctx.decodeAudioData(arrayBuffer);
 
-      const rendered = await renderProcessedBuffer(decodedBuffer, speed, pitch);
+      // In daylight mode, use natural daylight speed (1.02x) unless configured differently
+      const auditionSpeed = isDay && speed < 0.95 ? voice.daylightSpeed : speed;
+      const rendered = await renderProcessedBuffer(decodedBuffer, auditionSpeed, pitch);
       const source = ctx.createBufferSource();
       source.buffer = rendered;
       source.connect(ctx.destination);
@@ -539,6 +592,7 @@ export default function App() {
   };
 
   const activeVoice = VOICES.find((v) => v.id === selectedVoiceId) || VOICES[0];
+  const isDaylight = readingAtmosphere === 'daylight';
 
   return (
     <div className="min-h-screen bg-[#FDFBF7] dark:bg-[#181614] text-stone-900 dark:text-stone-100 transition-colors duration-200">
@@ -549,6 +603,8 @@ export default function App() {
         setActiveTab={setActiveTab}
         language={language}
         setLanguage={setLanguage}
+        readingAtmosphere={readingAtmosphere}
+        setReadingAtmosphere={handleSwitchAtmosphere}
         isBedtimeMode={isBedtimeMode}
         setIsBedtimeMode={setIsBedtimeMode}
         isFocusMode={isFocusMode}
@@ -584,15 +640,54 @@ export default function App() {
         {activeTab === 'workshop' && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start pb-28">
             <section className="lg:col-span-7 flex flex-col gap-6">
-              <div className="flex items-center gap-2 text-xs text-amber-800/80 dark:text-amber-300/80 font-medium">
-                <Heart className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 fill-current" />
-                <span>
-                  {language === 'es'
-                    ? 'Estudio de Narración para Cuentos Infantiles y Nanas'
-                    : 'Bedtime & Picture Book Storytelling Studio'}
-                </span>
-                <span aria-hidden="true">·</span>
-                <span>{language === 'es' ? 'Solo voz humana natural' : 'Pure natural voice only'}</span>
+              
+              {/* Reading Atmosphere Status Header */}
+              <div className="flex items-center justify-between p-3.5 rounded-xl bg-[#F7F3EC] dark:bg-[#201D1A] border border-amber-900/10 dark:border-amber-100/10">
+                <div className="flex items-center gap-2.5 text-xs">
+                  {isDaylight ? (
+                    <div className="w-6 h-6 rounded-lg bg-amber-500/20 text-amber-700 dark:text-amber-400 flex items-center justify-center font-bold">
+                      <Sun className="w-3.5 h-3.5" />
+                    </div>
+                  ) : (
+                    <div className="w-6 h-6 rounded-lg bg-indigo-500/20 text-indigo-700 dark:text-indigo-400 flex items-center justify-center font-bold">
+                      <Moon className="w-3.5 h-3.5" />
+                    </div>
+                  )}
+                  <div>
+                    <span className="font-semibold text-stone-900 dark:text-stone-100 block">
+                      {isDaylight
+                        ? language === 'es'
+                          ? 'Modo: Lectura Dulce de Día'
+                          : 'Mode: Sweet Daylight Reading'
+                        : language === 'es'
+                        ? 'Modo: Cuentos Para Dormir'
+                        : 'Mode: Bedtime Stories Focus'}
+                    </span>
+                    <span className="text-[11px] text-stone-500 dark:text-stone-400">
+                      {isDaylight
+                        ? language === 'es'
+                          ? 'Cadencia vivaz, alegre y natural (1.02x)'
+                          : 'Natural cheerful cadence, joyful curiosity (1.02x)'
+                        : language === 'es'
+                        ? 'Cadencia suave, pausada y reconfortante (0.90x)'
+                        : 'Slow, soothing lullaby cadence for sleep (0.90x)'}
+                    </span>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => handleSwitchAtmosphere(isDaylight ? 'bedtime' : 'daylight')}
+                  className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-white/80 dark:bg-stone-900 border border-stone-200 dark:border-stone-800 text-stone-700 dark:text-stone-300 hover:text-amber-800 dark:hover:text-amber-300 transition-colors cursor-pointer"
+                >
+                  {isDaylight
+                    ? language === 'es'
+                      ? '🌙 Cambiar a Noche'
+                      : '🌙 Switch to Bedtime'
+                    : language === 'es'
+                    ? '☀️ Cambiar a Día'
+                    : '☀️ Switch to Daylight'}
+                </button>
               </div>
 
               <StoryEditor
@@ -610,6 +705,7 @@ export default function App() {
                 selectedVoiceId={selectedVoiceId}
                 onOpenBatchImport={() => setIsBatchModalOpen(true)}
                 onViewCollection={() => setActiveTab('collection')}
+                readingAtmosphere={readingAtmosphere}
               />
             </section>
 
@@ -622,6 +718,8 @@ export default function App() {
                 pitch={pitch}
                 setPitch={setPitch}
                 language={language}
+                readingAtmosphere={readingAtmosphere}
+                setReadingAtmosphere={handleSwitchAtmosphere}
                 onPreviewVoice={handlePreviewVoice}
                 isPreviewing={isPreviewing}
                 previewVoiceId={previewVoiceId}
@@ -664,6 +762,7 @@ export default function App() {
             }}
             speed={speed}
             pitch={pitch}
+            readingAtmosphere={readingAtmosphere}
           />
         )}
 

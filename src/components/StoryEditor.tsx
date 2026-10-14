@@ -17,6 +17,7 @@ interface StoryEditorProps {
   selectedVoiceId: string;
   onOpenBatchImport?: () => void;
   onViewCollection?: () => void;
+  readingAtmosphere?: 'daylight' | 'bedtime';
 }
 
 export const StoryEditor: React.FC<StoryEditorProps> = ({
@@ -34,8 +35,11 @@ export const StoryEditor: React.FC<StoryEditorProps> = ({
   selectedVoiceId,
   onOpenBatchImport,
   onViewCollection,
+  readingAtmosphere = 'daylight',
 }) => {
-  const filteredStories = PRELOADED_STORIES.filter((s) => s.language === language);
+  const filteredStories = PRELOADED_STORIES.filter(
+    (s) => s.language === language && (s.mode === readingAtmosphere || !s.mode)
+  );
 
   const handleSelectStory = (sample: StorySample) => {
     setTitle(sample.title);

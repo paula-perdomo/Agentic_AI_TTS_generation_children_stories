@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { BENCHMARK_TESTS, BenchmarkTest } from '../data/benchmarks';
 import { VOICES, VoiceProfile } from '../data/voices';
-import { Play, Pause, Loader2, Award, Sparkles, CheckCircle, Volume2, ArrowRightLeft } from 'lucide-react';
+import { Play, Pause, Loader2, Award, Sparkles, CheckCircle, Volume2, Sun, Moon } from 'lucide-react';
 
 interface AuditionSuiteProps {
   language: 'en' | 'es';
@@ -9,6 +9,7 @@ interface AuditionSuiteProps {
   onApplyVoice: (voiceId: string) => void;
   speed: number;
   pitch: number;
+  readingAtmosphere?: 'daylight' | 'bedtime';
 }
 
 export const AuditionSuite: React.FC<AuditionSuiteProps> = ({
@@ -17,8 +18,10 @@ export const AuditionSuite: React.FC<AuditionSuiteProps> = ({
   onApplyVoice,
   speed,
   pitch,
+  readingAtmosphere = 'daylight',
 }) => {
   const [selectedTestId, setSelectedTestId] = useState<string>(BENCHMARK_TESTS[0].id);
+  const [auditionMode, setAuditionMode] = useState<'daylight' | 'bedtime'>(readingAtmosphere);
   const [testVoiceId, setTestVoiceId] = useState<string>(currentVoiceId);
   const [compareVoiceId, setCompareVoiceId] = useState<string>('Achernar');
   const [isAuditioning, setIsAuditioning] = useState<boolean>(false);
@@ -31,7 +34,16 @@ export const AuditionSuite: React.FC<AuditionSuiteProps> = ({
   const activeVoice = VOICES.find((v) => v.id === testVoiceId) || VOICES[0];
   const compareVoice = VOICES.find((v) => v.id === compareVoiceId) || VOICES[1];
 
-  const testText = language === 'es' ? activeTest.testPhraseEs : activeTest.testPhraseEn;
+  const isDaylight = auditionMode === 'daylight';
+
+  // Dynamic test phrase depending on Daylight vs Bedtime
+  const testText = isDaylight
+    ? language === 'es'
+      ? activeTest.testPhraseDaylightEs
+      : activeTest.testPhraseDaylightEn
+    : language === 'es'
+    ? activeTest.testPhraseEs
+    : activeTest.testPhraseEn;
 
   const handleRunAudition = async (target: 'primary' | 'compare') => {
     const targetVoice = target === 'primary' ? testVoiceId : compareVoiceId;
@@ -44,6 +56,14 @@ export const AuditionSuite: React.FC<AuditionSuiteProps> = ({
         setIsPlaying(false);
       }
 
+      const styleDirective = isDaylight
+        ? language === 'es'
+          ? 'Voz dulce, alegre, luminosa y natural de cuentacuentos infantil. Tono amigable, vivaz y tierno a la luz del día.'
+          : 'Sweet, cheerful, bright children’s storybook narrator with a sunny, friendly higher pitch, engaging natural curiosity, and sweet flowing daylight pace.'
+        : language === 'es'
+        ? 'Voz suave, dulce y reconfortante de narradora de cuentos infantiles. Tono cálido, amigable, con cadencia rítmica para antes de dormir.'
+        : 'Soft, gentle, warm children’s book narrator with a comforting bedtime cadence, peaceful measured pacing, and quiet articulation.';
+
       const res = await fetch('/api/tts/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -51,7 +71,8 @@ export const AuditionSuite: React.FC<AuditionSuiteProps> = ({
           text: testText,
           voice: targetVoice,
           language,
-          style: 'Gentle, soft, clear articulation for children voice quality testing.',
+          mode: auditionMode,
+          style: styleDirective,
         }),
       });
 
@@ -64,8 +85,8 @@ export const AuditionSuite: React.FC<AuditionSuiteProps> = ({
       setActiveAudioUrl(audioUrl);
 
       const audio = new Audio(audioUrl);
-      // Apply pitch and speed preview
-      audio.playbackRate = speed;
+      // In daylight mode, audition at sweet natural pace (1.02x) unless customized
+      audio.playbackRate = isDaylight && speed < 0.95 ? 1.02 : speed;
       audio.onended = () => setIsPlaying(false);
       audio.onerror = () => setIsPlaying(false);
 
@@ -107,15 +128,43 @@ export const AuditionSuite: React.FC<AuditionSuiteProps> = ({
               </h2>
             </div>
             <p className="text-xs text-stone-600 dark:text-stone-400 mt-1 max-w-2xl leading-relaxed">
-              {language === 'es'
-                ? 'Verifica la claridad, estabilidad del tono agudo y naturalidad de las voces infantiles mediante pruebas fonéticas y rítmicas estandarizadas en español e inglés.'
-                : 'Benchmark articulation clarity, higher-register warmth, and breath cadence across standardized bilingual stress-tests before generating full stories.'}
+              {isDaylight
+                ? language === 'es'
+                  ? 'Audiciona las voces en un entorno de lectura a la luz del día, con ritmo dulce, fluido y vivaz.'
+                  : 'Audition narrators in a sweet daylight reading setup with sunny, natural pacing and bright warmth.'
+                : language === 'es'
+                ? 'Audiciona las voces con ritmo pausado y cadencia arrulladora para antes de dormir.'
+                : 'Audition narrators with slow, comforting lullaby cadence designed for sleep time.'}
             </p>
           </div>
 
-          <div className="flex items-center gap-2 text-xs font-mono text-stone-600 dark:text-stone-400">
-            <span>{language === 'es' ? 'Pruebas Disponibles:' : 'Test Battery:'}</span>
-            <span className="font-semibold text-amber-800 dark:text-amber-300">4 Categorías</span>
+          {/* Audition Mode Switcher: Daylight vs Bedtime */}
+          <div className="flex items-center p-1 rounded-xl bg-white/80 dark:bg-stone-900 border border-amber-900/10 dark:border-amber-100/10 shrink-0">
+            <button
+              type="button"
+              onClick={() => setAuditionMode('daylight')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+                isDaylight
+                  ? 'bg-amber-500 text-amber-950 shadow-xs'
+                  : 'text-stone-600 dark:text-stone-400 hover:text-stone-900'
+              }`}
+            >
+              <Sun className="w-3.5 h-3.5" />
+              <span>{language === 'es' ? 'Luz del Día' : 'Sweet Daylight'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setAuditionMode('bedtime')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+                !isDaylight
+                  ? 'bg-indigo-900 text-indigo-100 shadow-xs'
+                  : 'text-stone-600 dark:text-stone-400 hover:text-stone-900'
+              }`}
+            >
+              <Moon className="w-3.5 h-3.5" />
+              <span>{language === 'es' ? 'Para Dormir' : 'Bedtime'}</span>
+            </button>
           </div>
         </div>
 
@@ -154,15 +203,20 @@ export const AuditionSuite: React.FC<AuditionSuiteProps> = ({
         
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-stone-200/60 dark:border-stone-800">
           <div>
-            <span className="text-[11px] font-mono uppercase tracking-wider text-amber-700 dark:text-amber-400">
-              {activeTest.category} · {language === 'es' ? 'Texto de Prueba' : 'Benchmark Passage'}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-mono uppercase tracking-wider text-amber-700 dark:text-amber-400">
+                {activeTest.category} · {language === 'es' ? 'Texto de Prueba' : 'Benchmark Passage'}
+              </span>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-950 text-amber-900 dark:text-amber-300">
+                {isDaylight ? (language === 'es' ? '☀️ Frase de Día' : '☀️ Daylight Passage') : (language === 'es' ? '🌙 Frase de Noche' : '🌙 Bedtime Passage')}
+              </span>
+            </div>
             <h3 className="font-serif text-lg font-bold text-stone-900 dark:text-stone-100 mt-0.5">
               {activeTest.name}
             </h3>
           </div>
           <span className="text-xs text-stone-500 dark:text-stone-400 italic">
-            {activeTest.optimalVoiceHint}
+            {isDaylight ? activeTest.optimalVoiceDaylightHint : activeTest.optimalVoiceHint}
           </span>
         </div>
 
@@ -194,17 +248,23 @@ export const AuditionSuite: React.FC<AuditionSuiteProps> = ({
                 >
                   {VOICES.map((v) => (
                     <option key={v.id} value={v.id}>
-                      {v.name} ({v.characterTitle})
+                      {v.name} ({isDaylight ? v.daylightTitle : v.characterTitle})
                     </option>
                   ))}
                 </select>
               </div>
 
               <div className="mt-3 flex items-center justify-between text-xs">
-                <span className="text-stone-600 dark:text-stone-400">{activeVoice.genderVibe}</span>
+                <span className="text-stone-600 dark:text-stone-400 font-medium">
+                  {isDaylight ? activeVoice.daylightTitle : activeVoice.characterTitle}
+                </span>
                 <span className="font-mono tabular-nums text-amber-800 dark:text-amber-300 font-semibold">
                   {activeVoice.pitchRegister}
                 </span>
+              </div>
+
+              <div className="text-[11px] text-stone-500 mt-1 line-clamp-2 italic">
+                {isDaylight ? activeVoice.daylightDescription : activeVoice.timbreDescription}
               </div>
 
               {/* Consistency Metrics breakdown */}
@@ -242,7 +302,11 @@ export const AuditionSuite: React.FC<AuditionSuiteProps> = ({
                 ) : (
                   <Play className="w-3.5 h-3.5 fill-current" />
                 )}
-                <span>{language === 'es' ? `Audicionar ${activeVoice.name}` : `Audition ${activeVoice.name}`}</span>
+                <span>
+                  {language === 'es'
+                    ? `Audicionar ${activeVoice.name} (${isDaylight ? 'Día' : 'Noche'})`
+                    : `Audition ${activeVoice.name} (${isDaylight ? 'Day' : 'Bedtime'})`}
+                </span>
               </button>
 
               <button
@@ -270,17 +334,23 @@ export const AuditionSuite: React.FC<AuditionSuiteProps> = ({
                 >
                   {VOICES.map((v) => (
                     <option key={v.id} value={v.id}>
-                      {v.name} ({v.characterTitle})
+                      {v.name} ({isDaylight ? v.daylightTitle : v.characterTitle})
                     </option>
                   ))}
                 </select>
               </div>
 
               <div className="mt-3 flex items-center justify-between text-xs">
-                <span className="text-stone-600 dark:text-stone-400">{compareVoice.genderVibe}</span>
+                <span className="text-stone-600 dark:text-stone-400 font-medium">
+                  {isDaylight ? compareVoice.daylightTitle : compareVoice.characterTitle}
+                </span>
                 <span className="font-mono tabular-nums text-amber-800 dark:text-amber-300 font-semibold">
                   {compareVoice.pitchRegister}
                 </span>
+              </div>
+
+              <div className="text-[11px] text-stone-500 mt-1 line-clamp-2 italic">
+                {isDaylight ? compareVoice.daylightDescription : compareVoice.timbreDescription}
               </div>
 
               {/* Consistency Metrics breakdown */}
@@ -318,7 +388,11 @@ export const AuditionSuite: React.FC<AuditionSuiteProps> = ({
                 ) : (
                   <Play className="w-3.5 h-3.5 fill-current" />
                 )}
-                <span>{language === 'es' ? `Audicionar ${compareVoice.name}` : `Audition ${compareVoice.name}`}</span>
+                <span>
+                  {language === 'es'
+                    ? `Audicionar ${compareVoice.name} (${isDaylight ? 'Día' : 'Noche'})`
+                    : `Audition ${compareVoice.name} (${isDaylight ? 'Day' : 'Bedtime'})`}
+                </span>
               </button>
 
               <button
@@ -339,9 +413,13 @@ export const AuditionSuite: React.FC<AuditionSuiteProps> = ({
           <div className="p-3 rounded-xl bg-amber-100/50 dark:bg-amber-950/30 border border-amber-300/40 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2 text-xs font-medium text-amber-950 dark:text-amber-100">
               <Volume2 className="w-4 h-4 text-amber-700 dark:text-amber-400" />
-              <span>{language === 'es' ? 'Clip de Prueba Listo' : 'Test Clip Ready'}</span>
+              <span>
+                {language === 'es'
+                  ? `Clip ${isDaylight ? 'Luz del Día' : 'Para Dormir'} Listo`
+                  : `${isDaylight ? 'Sweet Daylight' : 'Bedtime'} Clip Ready`}
+              </span>
               <span className="text-[11px] text-stone-500 font-mono">
-                ({speed.toFixed(2)}x · {pitch > 0 ? `+${pitch}` : pitch} st)
+                ({isDaylight ? 'Ritmo Dulce y Natural' : 'Ritmo Calmo'} · {pitch > 0 ? `+${pitch}` : pitch} st)
               </span>
             </div>
 

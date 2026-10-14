@@ -6,6 +6,8 @@ interface HeaderProps {
   setActiveTab: (tab: 'workshop' | 'collection' | 'audition') => void;
   language: 'en' | 'es';
   setLanguage: (lang: 'en' | 'es') => void;
+  readingAtmosphere: 'daylight' | 'bedtime';
+  setReadingAtmosphere: (mode: 'daylight' | 'bedtime') => void;
   isBedtimeMode: boolean;
   setIsBedtimeMode: (val: boolean | ((prev: boolean) => boolean)) => void;
   isFocusMode: boolean;
@@ -21,6 +23,8 @@ export const Header: React.FC<HeaderProps> = ({
   setActiveTab,
   language,
   setLanguage,
+  readingAtmosphere,
+  setReadingAtmosphere,
   isBedtimeMode,
   setIsBedtimeMode,
   setIsFocusMode,
@@ -98,12 +102,52 @@ export const Header: React.FC<HeaderProps> = ({
         </nav>
 
         {/* Zone 3: Actions & Controls */}
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex items-center gap-2.5 shrink-0">
+          
+          {/* Sweet Daylight vs Bedtime Mode Toggle */}
+          <div className="flex items-center p-0.5 rounded-lg bg-amber-100/70 dark:bg-stone-800 border border-amber-300/40 dark:border-stone-700 text-xs font-medium">
+            <button
+              onClick={() => {
+                setReadingAtmosphere('daylight');
+                setIsBedtimeMode(false);
+              }}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition-all cursor-pointer ${
+                readingAtmosphere === 'daylight'
+                  ? 'bg-amber-500 text-amber-950 font-bold shadow-xs'
+                  : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100'
+              }`}
+              title="Sweet daylight reading with natural, lively, cheerful cadence"
+            >
+              <Sun className="w-3.5 h-3.5 text-amber-950" />
+              <span className="hidden sm:inline">
+                {language === 'es' ? 'Luz del Día' : 'Sweet Daylight'}
+              </span>
+            </button>
+
+            <button
+              onClick={() => {
+                setReadingAtmosphere('bedtime');
+                setIsBedtimeMode(true);
+              }}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition-all cursor-pointer ${
+                readingAtmosphere === 'bedtime'
+                  ? 'bg-indigo-900 text-indigo-100 font-bold shadow-xs'
+                  : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100'
+              }`}
+              title="Sleepy bedtime stories with gentle, slow, soothing lullaby cadence"
+            >
+              <Moon className="w-3.5 h-3.5 text-indigo-300" />
+              <span className="hidden sm:inline">
+                {language === 'es' ? 'Hora de Dormir' : 'Bedtime'}
+              </span>
+            </button>
+          </div>
+
           {/* Language Switcher */}
           <div className="flex items-center p-0.5 rounded-lg bg-stone-200/60 dark:bg-stone-800/70 text-xs font-medium">
             <button
               onClick={() => setLanguage('en')}
-              className={`px-2.5 py-1 rounded-md transition-colors ${
+              className={`px-2 py-1 rounded-md transition-colors ${
                 language === 'en'
                   ? 'bg-white dark:bg-stone-700 text-stone-900 dark:text-stone-100 shadow-xs font-semibold'
                   : 'text-stone-600 dark:text-stone-400 hover:text-stone-900'
@@ -113,7 +157,7 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
             <button
               onClick={() => setLanguage('es')}
-              className={`px-2.5 py-1 rounded-md transition-colors ${
+              className={`px-2 py-1 rounded-md transition-colors ${
                 language === 'es'
                   ? 'bg-white dark:bg-stone-700 text-stone-900 dark:text-stone-100 shadow-xs font-semibold'
                   : 'text-stone-600 dark:text-stone-400 hover:text-stone-900'
@@ -122,16 +166,6 @@ export const Header: React.FC<HeaderProps> = ({
               ES
             </button>
           </div>
-
-          {/* Bedtime / Theme Toggle */}
-          <button
-            onClick={() => setIsBedtimeMode((prev) => !prev)}
-            aria-label="Toggle bedtime dark mode"
-            className="p-2 rounded-lg text-stone-600 dark:text-amber-300 hover:bg-stone-200/50 dark:hover:bg-stone-800 transition-colors"
-            title={isBedtimeMode ? 'Switch to daylight paper' : 'Switch to bedtime night mode'}
-          >
-            {isBedtimeMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-          </button>
 
           {/* Prominent Download MP3 Button (when audio is generated) */}
           {hasAudio && (
