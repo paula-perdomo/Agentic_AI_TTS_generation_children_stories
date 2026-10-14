@@ -15,6 +15,8 @@ import {
   Sparkles,
   ArrowRight,
   Square,
+  Volume2,
+  Check,
 } from 'lucide-react';
 
 export interface StoryItem {
@@ -36,6 +38,7 @@ interface StoryCollectionProps {
   currentStoryId: string;
   onSelectStory: (id: string) => void;
   onUpdateStoryVoice: (id: string, voiceId: string) => void;
+  onUpdateAllStoriesVoice?: (voiceId: string, storyIds?: string[]) => void;
   onDeleteStory: (id: string) => void;
   onOpenBatchImport: () => void;
   onAddNewStory: () => void;
@@ -57,6 +60,7 @@ export const StoryCollection: React.FC<StoryCollectionProps> = ({
   currentStoryId,
   onSelectStory,
   onUpdateStoryVoice,
+  onUpdateAllStoriesVoice,
   onDeleteStory,
   onOpenBatchImport,
   onAddNewStory,
@@ -73,6 +77,31 @@ export const StoryCollection: React.FC<StoryCollectionProps> = ({
   onNavigateToWorkshop,
 }) => {
   const [filterLang, setFilterLang] = useState<'all' | 'en' | 'es'>('all');
+  const [bulkVoiceId, setBulkVoiceId] = useState<string>('Achernar');
+  const [bulkFeedback, setBulkFeedback] = useState<string | null>(null);
+
+  const handleApplyBulkVoice = () => {
+    const targetIds = filterLang === 'all' ? undefined : filteredStories.map((s) => s.id);
+    const count = targetIds ? targetIds.length : stories.length;
+    const selectedVoiceObj = VOICES.find((v) => v.id === bulkVoiceId);
+    const voiceName = selectedVoiceObj ? selectedVoiceObj.name : bulkVoiceId;
+
+    if (onUpdateAllStoriesVoice) {
+      onUpdateAllStoriesVoice(bulkVoiceId, targetIds);
+    } else {
+      const ids = targetIds || stories.map((s) => s.id);
+      ids.forEach((id) => onUpdateStoryVoice(id, bulkVoiceId));
+    }
+
+    setBulkFeedback(
+      language === 'es'
+        ? `¡Voz ${voiceName} asignada a ${count} cuentos!`
+        : `Voice ${voiceName} applied to ${count} stories!`
+    );
+    setTimeout(() => {
+      setBulkFeedback(null);
+    }, 3500);
+  };
 
   const filteredStories = stories.filter((s) => {
     if (filterLang === 'all') return true;
@@ -171,8 +200,9 @@ export const StoryCollection: React.FC<StoryCollectionProps> = ({
         </div>
       </div>
 
-      {/* Filter Tabs */}
-      <div className="flex items-center justify-between text-xs border-b border-amber-900/10 dark:border-amber-100/10 pb-2">
+      {/* Filter Tabs & Bulk Voice Action Bar */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 text-xs border-b border-amber-900/10 dark:border-amber-100/10 pb-3">
+        {/* Left: Filter Tabs */}
         <div className="flex items-center gap-2">
           <span className="text-stone-500">{language === 'es' ? 'Filtrar:' : 'Filter:'}</span>
           <div className="flex items-center p-0.5 rounded-lg bg-stone-200/60 dark:bg-stone-800">
@@ -207,6 +237,59 @@ export const StoryCollection: React.FC<StoryCollectionProps> = ({
               Español ({stories.filter((s) => s.language === 'es').length})
             </button>
           </div>
+        </div>
+
+        {/* Right: Bulk Voice Selector for All Stories */}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1.5 text-stone-600 dark:text-stone-300">
+            <Volume2 className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400" />
+            <span className="font-semibold text-stone-800 dark:text-stone-200">
+              {language === 'es' ? 'Voz para todos:' : 'Voice for all stories:'}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <select
+              value={bulkVoiceId}
+              onChange={(e) => setBulkVoiceId(e.target.value)}
+              className="text-xs font-semibold bg-white dark:bg-stone-900 border border-stone-300 dark:border-stone-700 rounded-lg px-2.5 py-1.5 text-stone-900 dark:text-stone-100 shadow-2xs focus:ring-1 focus:ring-amber-500 cursor-pointer"
+            >
+              {VOICES.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.name} ({v.characterTitle.split('•')[0].trim()})
+                </option>
+              ))}
+            </select>
+
+            <button
+              type="button"
+              onClick={handleApplyBulkVoice}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-amber-950 dark:text-amber-100 bg-amber-200/90 hover:bg-amber-300 dark:bg-amber-900/50 dark:hover:bg-amber-900/80 rounded-lg border border-amber-300/80 dark:border-amber-700/60 shadow-2xs transition-colors cursor-pointer"
+              title={
+                language === 'es'
+                  ? 'Asignar esta voz a todos los cuentos de la lista'
+                  : 'Assign this voice to all stories in the list'
+              }
+            >
+              <Check className="w-3 h-3 text-amber-900 dark:text-amber-300" />
+              <span>
+                {filterLang === 'all'
+                  ? language === 'es'
+                    ? `Aplicar a Todos (${stories.length})`
+                    : `Apply to All (${stories.length})`
+                  : language === 'es'
+                  ? `Aplicar a Visibles (${filteredStories.length})`
+                  : `Apply to Shown (${filteredStories.length})`}
+              </span>
+            </button>
+          </div>
+
+          {bulkFeedback && (
+            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-800 dark:text-emerald-300 bg-emerald-100/90 dark:bg-emerald-950/70 border border-emerald-300 dark:border-emerald-800 px-2.5 py-1 rounded-md animate-fade-in">
+              <CheckCircle2 className="w-3 h-3 text-emerald-700 dark:text-emerald-400" />
+              <span>{bulkFeedback}</span>
+            </span>
+          )}
         </div>
       </div>
 
@@ -265,8 +348,8 @@ export const StoryCollection: React.FC<StoryCollectionProps> = ({
                 {/* Metadata & Voice Configuration */}
                 <div className="mt-3 pt-3 border-t border-stone-200/60 dark:border-stone-800 flex flex-wrap items-center justify-between gap-2 text-xs">
                   <div className="flex items-center gap-2">
-                    <span className="text-stone-500 text-[11px]">
-                      {language === 'es' ? 'Voz:' : 'Voice:'}
+                    <span className="text-stone-500 text-[11px] font-medium">
+                      {language === 'es' ? 'Voz individual:' : 'Individual voice:'}
                     </span>
                     <select
                       value={story.voiceId}

@@ -522,13 +522,51 @@ export default function App() {
     }
   };
 
-  // Update voice on story in collection
+  // Update voice on individual story in collection
   const handleUpdateStoryVoice = (id: string, voiceId: string) => {
     setStories((prev) =>
-      prev.map((s) => (s.id === id ? { ...s, voiceId } : s))
+      prev.map((s) => {
+        if (s.id === id) {
+          const voiceChanged = s.voiceId !== voiceId;
+          return {
+            ...s,
+            voiceId,
+            audioBuffer: voiceChanged ? null : s.audioBuffer,
+            error: voiceChanged ? null : s.error,
+          };
+        }
+        return s;
+      })
     );
     if (id === currentStoryId) {
       setSelectedVoiceId(voiceId);
+      if (activeStory.voiceId !== voiceId) {
+        setAudioBuffer(null);
+      }
+    }
+  };
+
+  // Update voice for all or filtered stories
+  const handleUpdateAllStoriesVoice = (voiceId: string, storyIds?: string[]) => {
+    setStories((prev) =>
+      prev.map((s) => {
+        if (!storyIds || storyIds.includes(s.id)) {
+          const voiceChanged = s.voiceId !== voiceId;
+          return {
+            ...s,
+            voiceId,
+            audioBuffer: voiceChanged ? null : s.audioBuffer,
+            error: voiceChanged ? null : s.error,
+          };
+        }
+        return s;
+      })
+    );
+    if (!storyIds || storyIds.includes(currentStoryId)) {
+      setSelectedVoiceId(voiceId);
+      if (activeStory.voiceId !== voiceId) {
+        setAudioBuffer(null);
+      }
     }
   };
 
@@ -809,6 +847,7 @@ export default function App() {
             currentStoryId={currentStoryId}
             onSelectStory={handleSelectStory}
             onUpdateStoryVoice={handleUpdateStoryVoice}
+            onUpdateAllStoriesVoice={handleUpdateAllStoriesVoice}
             onDeleteStory={handleDeleteStory}
             onOpenBatchImport={() => setIsBatchModalOpen(true)}
             onAddNewStory={handleAddNewStory}
