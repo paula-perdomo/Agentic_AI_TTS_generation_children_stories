@@ -1,0 +1,6 @@
+{
+  "name": "Cadence - Children's Story Audio Studio",
+  "description": "Agentic text-to-speech studio for children's stories and bedtime fables, featuring soft, natural voices, precision speed and pitch controls, consistency testing, and MP3 export.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
