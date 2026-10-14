@@ -20,7 +20,7 @@ import {
   audioBufferToMp3,
   downloadMp3,
 } from './utils/audioProcessor';
-import { Sparkles, Sun, Moon, AlertCircle } from 'lucide-react';
+import { Sparkles, Sun, Moon, AlertCircle, Square, Loader2 } from 'lucide-react';
 
 export default function App() {
   // Navigation & Theme State
@@ -79,6 +79,8 @@ export default function App() {
   // Batch Generation State
   const [isBatchGenerating, setIsBatchGenerating] = useState<boolean>(false);
   const [batchProgress, setBatchProgress] = useState<{ current: number; total: number } | null>(null);
+  const isBatchCancelledRef = useRef<boolean>(false);
+  const batchAbortControllerRef = useRef<AbortController | null>(null);
 
   // Audition preview state
   const [isPreviewing, setIsPreviewing] = useState<boolean>(false);
@@ -274,7 +276,10 @@ export default function App() {
   };
 
   // Generate single story audio
-  const handleGenerateStoryById = async (targetId: string): Promise<AudioBuffer | null> => {
+  const handleGenerateStoryById = async (
+    targetId: string,
+    signal?: AbortSignal
+  ): Promise<AudioBuffer | null> => {
     const target = stories.find((s) => s.id === targetId);
     if (!target || !target.text.trim()) return null;
 
@@ -302,6 +307,7 @@ export default function App() {
           mode: readingAtmosphere,
           style: stylePrompt,
         }),
+        signal,
       });
 
       if (!response.ok) {
@@ -329,6 +335,12 @@ export default function App() {
 
       return decodedBuffer;
     } catch (err: any) {
+      if (err.name === 'AbortError' || signal?.aborted) {
+        setStories((prev) =>
+          prev.map((s) => (s.id === targetId ? { ...s, isGenerating: false } : s))
+        );
+        return null;
+      }
       console.error(`Audio error for story ${targetId}:`, err);
       setStories((prev) =>
         prev.map((s) =>
@@ -363,17 +375,47 @@ export default function App() {
     const pendingStories = stories.filter((s) => s.audioBuffer === null);
     if (pendingStories.length === 0) return;
 
+    isBatchCancelledRef.current = false;
+    const controller = new AbortController();
+    batchAbortControllerRef.current = controller;
+
     setIsBatchGenerating(true);
     setBatchProgress({ current: 0, total: pendingStories.length });
 
-    for (let i = 0; i < pendingStories.length; i++) {
-      const s = pendingStories[i];
-      setBatchProgress({ current: i + 1, total: pendingStories.length });
-      await handleGenerateStoryById(s.id);
+    try {
+      for (let i = 0; i < pendingStories.length; i++) {
+        if (isBatchCancelledRef.current) break;
+        const s = pendingStories[i];
+        setBatchProgress({ current: i + 1, total: pendingStories.length });
+        await handleGenerateStoryById(s.id, controller.signal);
+        if (isBatchCancelledRef.current) break;
+      }
+    } finally {
+      setIsBatchGenerating(false);
+      setBatchProgress(null);
+      batchAbortControllerRef.current = null;
+      isBatchCancelledRef.current = false;
+      setStories((prev) =>
+        prev.map((s) => (s.isGenerating ? { ...s, isGenerating: false } : s))
+      );
     }
+  };
 
+  // Stop batch generation
+  const handleStopBatchGeneration = () => {
+    isBatchCancelledRef.current = true;
+    if (batchAbortControllerRef.current) {
+      try {
+        batchAbortControllerRef.current.abort();
+      } catch (e) {
+        // Ignore abort exception
+      }
+    }
     setIsBatchGenerating(false);
     setBatchProgress(null);
+    setStories((prev) =>
+      prev.map((s) => (s.isGenerating ? { ...s, isGenerating: false } : s))
+    );
   };
 
   // Download MP3 for specific story
@@ -399,9 +441,9 @@ export default function App() {
 
       setDownloadSuccess(true);
       setTimeout(() => setDownloadSuccess(false), 3000);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Download error:', err);
-      setErrorMessage('Failed to encode MP3.');
+      setErrorMessage(`Failed to encode MP3: ${err?.message || err}`);
     } finally {
       setIsDownloading(false);
     }
@@ -633,6 +675,38 @@ export default function App() {
         </div>
       )}
 
+      {/* Active Batch Generation Banner */}
+      {isBatchGenerating && (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4">
+          <div className="p-3.5 rounded-xl bg-amber-50/95 dark:bg-amber-950/70 border border-amber-300 dark:border-amber-800 text-xs flex items-center justify-between shadow-xs">
+            <div className="flex items-center gap-3">
+              <Loader2 className="w-4 h-4 text-amber-700 dark:text-amber-400 animate-spin shrink-0" />
+              <div>
+                <span className="font-semibold text-stone-900 dark:text-stone-100">
+                  {language === 'es' ? 'Generando cuentos en lote' : 'Batch Generating Stories'}
+                </span>
+                <span className="text-stone-600 dark:text-stone-300 ml-2 font-mono">
+                  {batchProgress
+                    ? `${language === 'es' ? 'Cuento' : 'Story'} ${batchProgress.current}/${batchProgress.total}`
+                    : language === 'es'
+                    ? 'Iniciando...'
+                    : 'Starting...'}
+                </span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleStopBatchGeneration}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 dark:bg-rose-700 dark:hover:bg-rose-800 rounded-lg shadow-xs transition-colors cursor-pointer"
+              title={language === 'es' ? 'Detener el proceso por lote' : 'Stop batch process'}
+            >
+              <Square className="w-3 h-3 fill-current" />
+              <span>{language === 'es' ? 'Detener Proceso' : 'Stop Process'}</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Main Content Area */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         
@@ -740,6 +814,7 @@ export default function App() {
             onAddNewStory={handleAddNewStory}
             onGenerateSingleAudio={(id) => handleGenerateStoryById(id)}
             onGenerateAllPending={handleGenerateAllPending}
+            onStopBatchGeneration={handleStopBatchGeneration}
             isBatchGenerating={isBatchGenerating}
             batchProgress={batchProgress}
             onDownloadStoryMp3={handleDownloadStoryMp3}
